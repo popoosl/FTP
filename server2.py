@@ -11,7 +11,7 @@ next_seq = 0
 
 # get input
 # server_port, out_file, p = int(sys.argv[1]), sys.argv[2], float(sys.argv[3])
-server_port, out_file, prob = 7735, 'out.db', 0.05
+server_port, out_file, prob = 7735, 'out03.zip', 0.05
 
 # set server
 host = socket.gethostname()
@@ -36,6 +36,7 @@ def send_ack(h, p):
 def listen(s, h, p):
     global next_seq
     global acks
+    write_buffer = []
 
     while True:
         recvd_data, addr = server_socket.recvfrom(1000000)
@@ -61,9 +62,18 @@ def listen(s, h, p):
                 # write file
                 with open(out_file, 'ab') as f:
                     f.write(data)
+                    for
 
+            # Store future packet into buffer
+            elif int('0b'+seq, 2) > next_seq: # and re_checksum == checksum:
+                write_buffer.append(packet)
+                # prepare ACK
+                acks.append([bin(next_seq)[2:].zfill(32), bin(0)[2:].zfill(16), '1010101010101010'])
+
+
+            # Ignore acked packet
             else:
                 continue
 
 threading.Thread(target=listen, args=(server_socket, host, server_port)).start()
-threading.Thread(target=send_ack, args=(host, 7735)).start()
+threading.Thread(target=send_ack, args=(host, 62223)).start()

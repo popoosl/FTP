@@ -6,16 +6,13 @@ import sys
 
 # Get input
 # host, port, send_file, N, MSS = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
-# host, port, send_file, N, MSS = socket.gethostname(), 7735, 'test.db', 64, 500
-host, port, send_file, N, MSS = "10.139.61.135", 7735, 'in01.pdf', 2, 500
+host, port, send_file, N, MSS = socket.gethostname(), 7735, 'in02.zip', 10, 1000
 
 # Create socket
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
 # Only for test in local machine (same host), cannot use 7735 (server side has taken it)
 ack_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-# ack_socket.bind((host, 62223))
-ack_socket.bind(("", 7735))
+ack_socket.bind((host, 62223))
 
 packets = []  # all the packets
 new_buffer = []  # after receiving ACK, put new packets into new_buffer and send
@@ -52,7 +49,6 @@ def listen_ack(s, h):
     global ack
     global most_recent_send
     global most_recent_prepared
-    global cur_time
 
     # Listen to ACK
     while True:
@@ -66,25 +62,26 @@ def listen_ack(s, h):
             # the next packet of "most recent send packet" or "most recent planed to send packet"
             # is the smallest packet we should send
             # "ack+N-1" is the largest packet number we should send
-            cur_time = time.time()
             for j in range(max(most_recent_send+1, most_recent_prepared+1), min(len(packets), ack+N)):
                 # In this thread, only send new packet (slide the window to next)
                 most_recent_prepared = max(most_recent_prepared, j)
                 new_buffer.append(packets[j])
                 print("prepare: ", j)
         elif ack == len(packets):
-            print("Success!!!", "Time: ", time.time()-start_time)
+            print("Success!!!")
             break
 
 
 # Send thread
 def send_packet(h, p):
     global new_buffer
+    global cur_time
 
     while True:
         # send packet from new_buffer
         while new_buffer:
             socket_send(new_buffer)
+            cur_time = time.time()
 
 
 def timer():
@@ -99,7 +96,7 @@ def timer():
             socket_send(resend_buffer)
             cur_time = time.time()
         if ack == len(packets):
-            print("Success!!!", "Time: ", time.time()-start_time)
+            print("Success!!!")
             break
 
 
@@ -124,7 +121,6 @@ for i in range(min(N, len(packets))):
     new_buffer.append(packets[i])
 
 cur_time = time.time()
-start_time = time.time()
 
 most_recent_send = 0
 most_recent_prepared = min(N-1, len(packets)-1)
