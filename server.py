@@ -14,7 +14,8 @@ next_seq = 0
 server_port, out_file, prob = 7735, 'out.db', 0.05
 
 # set server
-host = socket.gethostname()
+# host = socket.gethostname()
+host = ""
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 server_socket.bind((host, server_port))
 ack_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -27,10 +28,11 @@ def calc_checksum():
     return 0
 
 
-def send_ack(h, p):
+def send_ack(s, p):
     while True:
         while acks:
-            ack_socket.sendto(pickle.dumps(acks.pop(0)), (h, p))
+            data = acks.pop(0)
+            s.sendto(pickle.dumps(data[0]), (data[1][0], p))
 
 
 def listen(s, h, p):
@@ -38,7 +40,7 @@ def listen(s, h, p):
     global acks
 
     while True:
-        recvd_data, addr = server_socket.recvfrom(1000000)
+        recvd_data, addr = s.recvfrom(1000000)
         # unserialize reveived List
         packet = pickle.loads(recvd_data)
         seq, checksum, packet_type, data = packet[0], packet[1], packet[2], packet[3]
@@ -56,7 +58,7 @@ def listen(s, h, p):
                 next_seq += 1
 
                 # prepare ACK
-                acks.append([bin(next_seq)[2:].zfill(32), bin(0)[2:].zfill(16), '1010101010101010'])
+                acks.append([[bin(next_seq)[2:].zfill(32), bin(0)[2:].zfill(16), '1010101010101010'], addr])
 
                 # write file
                 with open(out_file, 'ab') as f:
@@ -66,4 +68,4 @@ def listen(s, h, p):
                 continue
 
 threading.Thread(target=listen, args=(server_socket, host, server_port)).start()
-threading.Thread(target=send_ack, args=(host, 7735)).start()
+threading.Thread(target=send_ack, args=(ack_socket, server_port)).start()

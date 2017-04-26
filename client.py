@@ -15,7 +15,7 @@ client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # Only for test in local machine (same host), cannot use 7735 (server side has taken it)
 ack_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # ack_socket.bind((host, 62223))
-ack_socket.bind(("", 7735))
+ack_socket.bind(("", port))
 
 packets = []  # all the packets
 new_buffer = []  # after receiving ACK, put new packets into new_buffer and send
