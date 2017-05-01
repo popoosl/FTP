@@ -11,7 +11,7 @@ next_seq = 0
 
 # get input
 # server_port, out_file, p = int(sys.argv[1]), sys.argv[2], float(sys.argv[3])
-server_port, out_file, prob = 7735, 'out.db', 0.05
+server_port, out_file, prob = 7735, 'out.pdf', 0.01
 
 # set server
 # host = socket.gethostname()
@@ -24,8 +24,17 @@ print("The server:", host, " is ready to receive")
 acks = []
 
 
-def calc_checksum():
-    return 0
+def carry_bit(a, b):
+    c = a + b
+    return (c & 0xffff) + (c >> 16)
+
+
+def calc_checksum(data):
+    result = 0
+    for m in range(0, len(data), 2):
+        summ = ord(str(data)[m]) + (ord(str(data)[m+1]) << 8)
+        result = carry_bit(result, summ)
+    return (not result) & 0xffff
 
 
 def send_ack(s, p):
@@ -51,9 +60,9 @@ def listen(s, h, p):
             print("Packet loss, sequence number = ", int('0b'+seq, 2))
 
         else:
-            re_checksum = calc_checksum()
+            re_checksum = calc_checksum(data)
 
-            if int('0b'+seq, 2) == next_seq:  # and re_checksum == checksum:
+            if int('0b'+seq, 2) == next_seq and re_checksum == checksum:
                 print("Receive: ", int('0b' + seq, 2))
                 next_seq += 1
 
@@ -68,4 +77,4 @@ def listen(s, h, p):
                 continue
 
 threading.Thread(target=listen, args=(server_socket, host, server_port)).start()
-threading.Thread(target=send_ack, args=(ack_socket, server_port)).start()
+threading.Thread(target=send_ack, args=(ack_socket, 62223)).start()

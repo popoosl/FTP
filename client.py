@@ -6,8 +6,8 @@ import sys
 
 # Get input
 # host, port, send_file, N, MSS = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
-# host, port, send_file, N, MSS = socket.gethostname(), 7735, 'test.db', 64, 500
-host, port, send_file, N, MSS = "10.139.61.135", 7735, 'in01.pdf', 2, 500
+host, port, send_file, N, MSS = socket.gethostname(), 7735, 'Resume.pdf', 200, 2000
+# host, port, send_file, N, MSS = "10.139.61.135", 7735, 'in01.pdf', 2, 500
 
 # Create socket
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -15,7 +15,7 @@ client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # Only for test in local machine (same host), cannot use 7735 (server side has taken it)
 ack_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # ack_socket.bind((host, 62223))
-ack_socket.bind(("", port))
+ack_socket.bind(("", 62223))
 
 packets = []  # all the packets
 new_buffer = []  # after receiving ACK, put new packets into new_buffer and send
@@ -25,8 +25,17 @@ ack = 0
 
 
 # Checksum
+def carry_bit(a, b):
+    c = a + b
+    return (c & 0xffff) + (c >> 16)
+
+
 def calc_checksum(data):
-    return 0
+    result = 0
+    for m in range(0, len(data), 2):
+        summ = ord(str(data)[m]) + (ord(str(data)[m+1]) << 8)
+        result = carry_bit(result, summ)
+    return (not result) & 0xffff
 
 
 # Send packets

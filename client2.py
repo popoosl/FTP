@@ -6,7 +6,7 @@ import sys
 
 # Get input
 # host, port, send_file, N, MSS = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
-host, port, send_file, N, MSS = socket.gethostname(), 7735, 'in02.zip', 10, 1000
+host, port, send_file, N, MSS = socket.gethostname(), 7735, 'test.db', 4, 1000
 
 # Create socket
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -16,6 +16,8 @@ ack_socket.bind((host, 62223))
 
 packets = []  # all the packets
 new_buffer = []  # after receiving ACK, put new packets into new_buffer and send
+sending_buffer = {}  # stores packets sent but not acked
+time_buffer = {}  # stores send time of packets
 
 lock = threading.Lock()
 ack = 0
@@ -26,17 +28,50 @@ def calc_checksum(data):
     return 0
 
 
+def del_buffer(k):
+    global time_buffer
+    global sending_buffer
+
+    lock.acquire()
+    del time_buffer[k]
+    del sending_buffer[k]
+    lock.release()
+
+
+def timer():
+    global time_buffer
+
+    resend_buffer = []
+
+    while True:
+        print(time_buffer)
+        if time_buffer:
+            resend_seq = min(time_buffer)
+            if time.time() >= time_buffer[resend_seq] + 0.1:
+                del_buffer(resend_seq)
+
+                # Prepare resend packets
+                resend_buffer.append(packets[resend_seq])
+                print("Timeout, sequence number = ", resend_seq)
+                socket_send(resend_buffer)
+
+
 # Send packets
 def socket_send(data):
     global most_recent_send
     global lock
+    global sending_buffer
+    global time_buffer
 
     lock.acquire()
 
     while data:
         p = data.pop(0)
+        sending_buffer[int('0b' + p[0], 2)] = p
+        time_buffer[int('0b' + p[0], 2)] = time.time()
         client_socket.sendto(pickle.dumps(p), (host, port))
         print("Send packet: ", int('0b' + p[0], 2))
+        print(sending_buffer, time_buffer)
         # update
         most_recent_send = max(most_recent_send, int('0b' + p[0], 2))
 
@@ -49,55 +84,46 @@ def listen_ack(s, h):
     global ack
     global most_recent_send
     global most_recent_prepared
+    global cur_time
+    max_ack = 0
 
     # Listen to ACK
     while True:
         ack_packet, addr = s.recvfrom(1024)
         ack_packet = pickle.loads(ack_packet)
-        ack = int('0b' + ack_packet[0], 2)  # get ack number(next expected packet)
+        ack = int('0b' + ack_packet[0], 2)  # get ack number
+        max_ack = max(ack, max_ack)
 
         print("Receive ACK: ", ack)
 
-        if len(packets) > ack:
-            # the next packet of "most recent send packet" or "most recent planed to send packet"
-            # is the smallest packet we should send
-            # "ack+N-1" is the largest packet number we should send
-            for j in range(max(most_recent_send+1, most_recent_prepared+1), min(len(packets), ack+N)):
+        if ack in time_buffer and ack in sending_buffer:
+            del_buffer(ack)
+        print(time_buffer)
+
+        if not sending_buffer:
+            max_to_send = min(most_recent_prepared+N, len(packets)-1)
+        else:
+            max_to_send = min(min(sending_buffer)+N, len(packets)-1)
+
+        if len(packets)-1 > ack:
+            for j in range(most_recent_prepared+1, max_to_send):
                 # In this thread, only send new packet (slide the window to next)
                 most_recent_prepared = max(most_recent_prepared, j)
                 new_buffer.append(packets[j])
                 print("prepare: ", j)
-        elif ack == len(packets):
-            print("Success!!!")
+        elif ack == len(packets)-1:
+            print("Success!!!", "Time: ", time.time()-start_time)
             break
 
 
 # Send thread
 def send_packet(h, p):
     global new_buffer
-    global cur_time
 
     while True:
         # send packet from new_buffer
         while new_buffer:
             socket_send(new_buffer)
-            cur_time = time.time()
-
-
-def timer():
-    global cur_time
-    resend_buffer = []
-    while True:
-        if time.time() >= cur_time + 0.1:
-            # Prepare resend packets
-            for k in range(ack, min(len(packets), ack+N)):
-                resend_buffer.append(packets[k])
-            print("Timeout, sequence number = ", ack)
-            socket_send(resend_buffer)
-            cur_time = time.time()
-        if ack == len(packets):
-            print("Success!!!")
-            break
 
 
 # Read file and make packets
@@ -121,6 +147,7 @@ for i in range(min(N, len(packets))):
     new_buffer.append(packets[i])
 
 cur_time = time.time()
+start_time = time.time()
 
 most_recent_send = 0
 most_recent_prepared = min(N-1, len(packets)-1)
